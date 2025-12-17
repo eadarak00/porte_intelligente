@@ -1,5 +1,6 @@
 #include <SPI.h>
 #include <MFRC522.h>
+#include <Servo.h>
 
 #define SS_PIN 10
 #define RST_PIN 7
@@ -7,18 +8,22 @@
 #define LED_VERTE 4
 #define LED_ROUGE 5
 #define BUZZER 3
+#define SERVO_PIN 9
+
+#define PORTE_FERMEE 0
+#define PORTE_OUVERTE 120
 
 int tentative = 0;
 
 MFRC522 rfid(SS_PIN, RST_PIN);
+Servo servoPorte;
 
-// ========= UID AUTORISÉS (STRING) =========
+// ========= UID AUTORISÉS =========
 String uidAutorises[] = {
   "12 AB 34 CD",
   "69 FC B1 B0"
 };
-
-int nombreUidAutorises = 1;
+int nombreUidAutorises = 2;
 
 void setup() {
   Serial.begin(9600);
@@ -28,6 +33,9 @@ void setup() {
   pinMode(LED_VERTE, OUTPUT);
   pinMode(LED_ROUGE, OUTPUT);
   pinMode(BUZZER, OUTPUT);
+
+  servoPorte.attach(SERVO_PIN);
+  servoPorte.write(PORTE_FERMEE);
 
   digitalWrite(LED_VERTE, LOW);
   digitalWrite(LED_ROUGE, LOW);
@@ -52,7 +60,7 @@ void loop() {
   rfid.PICC_HaltA();
 }
 
-// ========= CONVERSION UID → STRING =========
+// ========= CONVERSION UID =========
 String lireUIDString() {
   String uid = "";
   for (byte i = 0; i < rfid.uid.size; i++) {
@@ -67,9 +75,7 @@ String lireUIDString() {
 // ========= VÉRIFICATION UID =========
 bool uidEstAutorise(String uidLu) {
   for (int i = 0; i < nombreUidAutorises; i++) {
-    if (uidLu == uidAutorises[i]) {
-      return true;
-    }
+    if (uidLu == uidAutorises[i]) return true;
   }
   return false;
 }
@@ -86,7 +92,11 @@ void accesAutorise() {
   delay(200);
   noTone(BUZZER);
 
-  delay(1000);
+  // Servo ouvre la porte
+  servoPorte.write(PORTE_OUVERTE);
+  delay(3000);
+  servoPorte.write(PORTE_FERMEE);
+
   digitalWrite(LED_VERTE, LOW);
 }
 
