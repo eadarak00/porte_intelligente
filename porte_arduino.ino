@@ -7,13 +7,16 @@
 
 #define LED_VERTE 4
 #define LED_ROUGE 5
-#define BUZZER 3
+#define BUZZER 6
 #define SERVO_PIN 9
 
 #define PORTE_FERMEE 0
-#define PORTE_OUVERTE 120
+#define PORTE_OUVERTE 90
 
 int tentative = 0;
+bool systemeBloque = false;
+unsigned long debutBlocage = 0;
+const unsigned long DUREE_BLOCAGE = 10000; // 10 secondes
 
 MFRC522 rfid(SS_PIN, RST_PIN);
 Servo servoPorte;
@@ -43,6 +46,17 @@ void setup() {
 }
 
 void loop() {
+
+  // ====== GESTION DU VERROUILLAGE ======
+  if (systemeBloque) {
+    if (millis() - debutBlocage >= DUREE_BLOCAGE) {
+      systemeBloque = false;
+      digitalWrite(LED_ROUGE, LOW);
+      Serial.println("🔓 SYSTÈME DÉBLOQUÉ");
+    }
+    return;
+  }
+
   if (!rfid.PICC_IsNewCardPresent()) return;
   if (!rfid.PICC_ReadCardSerial()) return;
 
@@ -92,7 +106,6 @@ void accesAutorise() {
   delay(200);
   noTone(BUZZER);
 
-  // Servo ouvre la porte
   servoPorte.write(PORTE_OUVERTE);
   delay(3000);
   servoPorte.write(PORTE_FERMEE);
@@ -116,10 +129,13 @@ void accesRefuse() {
   }
 
   if (tentative >= 3) {
-    Serial.println("🚨 ALARME !");
+    Serial.println("🚨 ALARME – SYSTÈME BLOQUÉ 10s");
     tone(BUZZER, 2000);
     delay(3000);
     noTone(BUZZER);
+
+    systemeBloque = true;
+    debutBlocage = millis();
     tentative = 0;
   }
 
