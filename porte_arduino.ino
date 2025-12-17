@@ -1,41 +1,57 @@
-//Arduino Code - RC522 Read RFID Tag UID
- 
+// Arduino Code - RC522 Read RFID Tag UID with LED
 #include <SPI.h>
 #include <MFRC522.h>
- 
+
 #define SS_PIN 10
 #define RST_PIN 7
- 
-MFRC522 rfid(SS_PIN, RST_PIN); // Instance of the class
- 
+#define LED_PIN 4  // Pin pour la LED
+
+MFRC522 rfid(SS_PIN, RST_PIN); // Instance de la classe
 MFRC522::MIFARE_Key key; 
- 
+
 void setup() { 
   Serial.begin(9600);
-  SPI.begin(); // Init SPI bus
-  rfid.PCD_Init(); // Init RC522 
+  
+  // Initialiser la LED
+  pinMode(LED_PIN, OUTPUT);
+  digitalWrite(LED_PIN, LOW); // Éteindre la LED au démarrage
+  
+  SPI.begin(); // Initialiser le bus SPI
+  rfid.PCD_Init(); // Initialiser le RC522 
+  
+  Serial.println("Système RFID prêt...");
 }
- 
+
 void loop() {
- 
-  // Reset the loop if no new card present on the sensor/reader. This saves the entire process when idle.
-  if ( ! rfid.PICC_IsNewCardPresent())
+  // Réinitialiser la boucle si aucune nouvelle carte n'est présente
+  if (!rfid.PICC_IsNewCardPresent())
     return;
- 
-  // Verify if the NUID has been readed
-  if ( ! rfid.PICC_ReadCardSerial())
+
+  // Vérifier si l'UID a été lu
+  if (!rfid.PICC_ReadCardSerial())
     return;
- 
+
   MFRC522::PICC_Type piccType = rfid.PICC_GetType(rfid.uid.sak);
- 
-  Serial.print(F("RFID Tag UID:"));
+
+  // Allumer la LED
+  digitalWrite(LED_PIN, HIGH);
+  
+  // Afficher l'UID
+  Serial.print("RFID Tag UID:");
   printHex(rfid.uid.uidByte, rfid.uid.size);
   Serial.println("");
- 
-  rfid.PICC_HaltA(); // Halt PICC
+  
+  // Garder la LED allumée pendant 1 seconde
+  delay(1000);
+  
+  // Éteindre la LED
+  digitalWrite(LED_PIN, LOW);
+
+  // Arrêter la communication avec la carte
+  rfid.PICC_HaltA();
 }
- 
-//Routine to dump a byte array as hex values to Serial. 
+
+// Routine pour afficher un tableau d'octets en hexadécimal sur le Serial
 void printHex(byte *buffer, byte bufferSize) {
   for (byte i = 0; i < bufferSize; i++) {
     Serial.print(buffer[i] < 0x10 ? " 0" : " ");
