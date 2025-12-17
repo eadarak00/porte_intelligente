@@ -1,140 +1,117 @@
-// Arduino Code - RC522 Read RFID Tag UID avec contrôle d'accès
 #include <SPI.h>
 #include <MFRC522.h>
 
 #define SS_PIN 10
 #define RST_PIN 7
-#define LED_VERTE 4     // Pin pour la LED verte (accès autorisé)
-#define LED_ROUGE 5     // Pin pour la LED rouge (accès refusé)
 
-MFRC522 rfid(SS_PIN, RST_PIN); // Instance de la classe
-MFRC522::MIFARE_Key key; 
+#define LED_VERTE 4
+#define LED_ROUGE 5
+#define BUZZER 3
 
-// Liste des UID autorisés (remplacez par vos propres UID)
+int tentative = 0;
+
+MFRC522 rfid(SS_PIN, RST_PIN);
+
+// ========= UID AUTORISÉS (STRING) =========
 String uidAutorises[] = {
-  "12 AB 34 CD",  
+  "12 AB 34 CD",
   "69 FC B1 B0"
 };
-int nombreUidAutorises = 2; // Nombre d'UID dans la liste
 
-void setup() { 
+int nombreUidAutorises = 1;
+
+void setup() {
   Serial.begin(9600);
-  
-  // Initialiser les LEDs
+  SPI.begin();
+  rfid.PCD_Init();
+
   pinMode(LED_VERTE, OUTPUT);
   pinMode(LED_ROUGE, OUTPUT);
-  
-  // Éteindre les LEDs au démarrage
+  pinMode(BUZZER, OUTPUT);
+
   digitalWrite(LED_VERTE, LOW);
   digitalWrite(LED_ROUGE, LOW);
-  
-  SPI.begin(); // Initialiser le bus SPI
-  rfid.PCD_Init(); // Initialiser le RC522 
-  
-  Serial.println("Système de contrôle d'accès RFID prêt...");
-  Serial.println("En attente d'un tag RFID...");
+  digitalWrite(BUZZER, LOW);
 }
 
 void loop() {
-  // Réinitialiser la boucle si aucune nouvelle carte n'est présente
-  if (!rfid.PICC_IsNewCardPresent())
-    return;
+  if (!rfid.PICC_IsNewCardPresent()) return;
+  if (!rfid.PICC_ReadCardSerial()) return;
 
-  // Vérifier si l'UID a été lu
-  if (!rfid.PICC_ReadCardSerial())
-    return;
+  String uidLu = lireUIDString();
 
-  // Lire l'UID du tag
+  Serial.print("UID détecté : ");
+  Serial.println(uidLu);
+
+  if (uidEstAutorise(uidLu)) {
+    accesAutorise();
+  } else {
+    accesRefuse();
+  }
+
+  rfid.PICC_HaltA();
+}
+
+// ========= CONVERSION UID → STRING =========
+String lireUIDString() {
   String uid = "";
   for (byte i = 0; i < rfid.uid.size; i++) {
-    if (rfid.uid.uidByte[i] < 0x10) {
-      uid += "0";
-    }
+    if (rfid.uid.uidByte[i] < 0x10) uid += "0";
     uid += String(rfid.uid.uidByte[i], HEX);
-    if (i < rfid.uid.size - 1) {
-      uid += " ";
-    }
+    if (i < rfid.uid.size - 1) uid += " ";
   }
   uid.toUpperCase();
-  
-  Serial.print("Tag détecté - UID: ");
-  Serial.println(uid);
-  
-  // Vérifier si l'UID est autorisé
-  boolean accesAutorise = false;
+  return uid;
+}
+
+// ========= VÉRIFICATION UID =========
+bool uidEstAutorise(String uidLu) {
   for (int i = 0; i < nombreUidAutorises; i++) {
-    if (uid == uidAutorises[i]) {
-      accesAutorise = true;
-      break;
+    if (uidLu == uidAutorises[i]) {
+      return true;
     }
   }
-  
-  // Gérer l'accès
-  if (accesAutorise) {
-    Serial.println(">> ACCES AUTORISE <<");
-    autoriserAcces();
-  } else {
-    Serial.println(">> ACCES REFUSE <<");
-    refuserAcces();
-  }
-  
-  // Arrêter la communication avec la carte
-  rfid.PICC_HaltA();
-  
-  // Petite pause avant de pouvoir scanner un nouveau tag
-  delay(2000);
+  return false;
 }
 
-// Fonction pour autoriser l'accès (LED verte)
-void autoriserAcces() {
-  // Éteindre la LED rouge au cas où elle serait allumée
-  digitalWrite(LED_ROUGE, LOW);
-  
-  // Allumer la LED verte
+// ========= ACCÈS AUTORISÉ =========
+void accesAutorise() {
+  Serial.println("✔ ACCÈS AUTORISÉ");
+  tentative = 0;
+
   digitalWrite(LED_VERTE, HIGH);
-  
-  // Faire clignoter la LED verte 2 fois rapidement
-  for(int i = 0; i < 2; i++) {
-    delay(150);
-    digitalWrite(LED_VERTE, LOW);
-    delay(150);
-    digitalWrite(LED_VERTE, HIGH);
-  }
-  
-  // Garder la LED verte allumée pendant 1 seconde
-  delay(1000);
-  
-  // Éteindre la LED verte
-  digitalWrite(LED_VERTE, LOW);
-}
-
-// Fonction pour refuser l'accès (LED rouge)
-void refuserAcces() {
-  // Éteindre la LED verte au cas où elle serait allumée
-  digitalWrite(LED_VERTE, LOW);
-  
-  // Allumer la LED rouge
-  digitalWrite(LED_ROUGE, HIGH);
-  
-  // Faire clignoter la LED rouge 3 fois lentement
-  for(int i = 0; i < 3; i++) {
-    delay(300);
-    digitalWrite(LED_ROUGE, LOW);
-    delay(300);
-    digitalWrite(LED_ROUGE, HIGH);
-  }
-  
-  // Garder la LED rouge allumée pendant 1 seconde
-  delay(1000);
-  
-  // Éteindre la LED rouge
   digitalWrite(LED_ROUGE, LOW);
+
+  tone(BUZZER, 1000);
+  delay(200);
+  noTone(BUZZER);
+
+  delay(1000);
+  digitalWrite(LED_VERTE, LOW);
 }
 
-// Routine pour afficher un tableau d'octets en hexadécimal sur le Serial
-void printHex(byte *buffer, byte bufferSize) {
-  for (byte i = 0; i < bufferSize; i++) {
-    Serial.print(buffer[i] < 0x10 ? " 0" : " ");
-    Serial.print(buffer[i], HEX);
+// ========= ACCÈS REFUSÉ =========
+void accesRefuse() {
+  Serial.println("❌ ACCÈS REFUSÉ");
+  tentative++;
+
+  digitalWrite(LED_ROUGE, HIGH);
+  digitalWrite(LED_VERTE, LOW);
+
+  for (int i = 0; i < 3; i++) {
+    tone(BUZZER, 500);
+    delay(150);
+    noTone(BUZZER);
+    delay(100);
   }
+
+  if (tentative >= 3) {
+    Serial.println("🚨 ALARME !");
+    tone(BUZZER, 2000);
+    delay(3000);
+    noTone(BUZZER);
+    tentative = 0;
+  }
+
+  digitalWrite(LED_ROUGE, LOW);
 }
